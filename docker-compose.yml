@@ -1,0 +1,69 @@
+version:  '3.7'
+
+services:
+  php:
+    image: abgeo/php-symfony:${PHP_VERSION}
+    container_name: "${PROJECT_NAME}_php"
+    environment:
+      APACHE_DOCUMENT_ROOT: /var/www/html/public
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      DB_DRIVER: ${DB_DRIVER}
+      COLUMNS: 80 # Set 80 columns for docker exec -it.
+    volumes:
+      - ./${PROJECT_DIR}:/var/www/html
+    labels:
+      - "traefik.http.routers.${PROJECT_NAME}_php.rule=Host(`${PROJECT_BASE_URL}`)"
+
+  mariadb:
+    image: mariadb:${MARIADB_TAG}
+    container_name: "${PROJECT_NAME}_mariadb"
+    stop_grace_period: 30s
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+    #    volumes:
+    #      - ./mariadb-init:/docker-entrypoint-initdb.d # Place init .sql file(s) here.
+    #      - /path/to/mariadb/data/on/host:/var/lib/mysql # Use bind mount
+
+  pma:
+    image: phpmyadmin/phpmyadmin
+    container_name: "${PROJECT_NAME}_pma"
+    environment:
+      PMA_HOST: ${DB_HOST}
+      PMA_USER: ${DB_USER}
+      PMA_PASSWORD: ${DB_PASS}
+      PHP_UPLOAD_MAX_FILESIZE: 1G
+      PHP_MAX_INPUT_VARS: 1G
+    labels:
+      - "traefik.http.routers.${PROJECT_NAME}_pma.rule=Host(`pma.${PROJECT_BASE_URL}`)"
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: "${PROJECT_NAME}_mailhog"
+    labels:
+      - "traefik.http.services.${PROJECT_NAME}_mailhog.loadbalancer.server.port=8025"
+      - "traefik.http.routers.${PROJECT_NAME}_mailhog.rule=Host(`mailhog.${PROJECT_BASE_URL}`)"
+
+  portainer:
+    image: portainer/portainer
+    container_name: "${PROJECT_NAME}_portainer"
+    command: --no-auth -H unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "traefik.http.routers.${PROJECT_NAME}_portainer.rule=Host(`portainer.${PROJECT_BASE_URL}`)"
+
+  traefik:
+    image: traefik:v2.0
+    container_name: "${PROJECT_NAME}_traefik"
+    command: --api.insecure=true --providers.docker
+    ports:
+      - '80:80'
+      - '8080:8080' # Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
